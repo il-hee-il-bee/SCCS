@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="com.sccs.api.member.mapper.MemberMapper">
+
+  <insert id="signUp" parameterType="MemberDto">
+    insert into member(
+    id,
+    password,
+    name,
+    nickname,
+    email,
+    score,
+    profile_image,
+    join_date,
+    salt
+    )
+    values(
+    #{id},
+    #{password},
+    #{name},
+    #{nickname},
+    #{email},
+    0,
+    null,
+    now(),
+    #{salt}
+    )
+  </insert>
+
+  <select id="memberInfo" parameterType="String" resultType="MemberDto">
+    select *
+    from member
+    where id = #{id}
+  </select>
+
+  <select id="findId" parameterType="hashmap" resultType="String">
+    select id
+    from member
+    where name = #{name} and email = #{email}
+  </select>
+
+  <update id="modify" parameterType="memberDto">
+    update member
+    set nickname = #{nickname}, email = #{email}, profile_image = #{profileImage}
+    where id = #{id}
+  </update>
+
+  <update id="modifyPassword" parameterType="memberDto">
+    update member
+    set password = #{password}
+    where id = #{id}
+  </update>
+
+  <select id="uniqueParam" parameterType="uniqueDto" resultType="string">
+    select id
+    from member
+    <bind name="types" value="_parameter.getType()"/>
+    <choose>
+      <when test="types.equals('id')">
+        where id = #{param}
+      </when>
+      <when test="types.equals('email')">
+        where email = #{param}
+      </when>
+      <when test="types.equals('nickname')">
+        where nickname = #{param}
+      </when>
+    </choose>
+  </select>
+
+  <delete id="delete" parameterType="string">
+    delete from member
+    where id = #{id}
+  </delete>
+
+</mapper>

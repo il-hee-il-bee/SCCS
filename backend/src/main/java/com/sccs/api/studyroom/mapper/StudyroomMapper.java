@@ -37,10 +37,11 @@ public interface StudyroomMapper {
   /** 특정 스터디 방으로 입장 : 대기방으로 입장 **/
   public StudyroomDto enterStudyroom(int id);
   public String getNicknameById(String id);
+  public String getIdByNickname(String nickname);
 
   /** 코딩 테스트 시작하기 **/
   public void changeStudyroomSolvingStatus(StudyroomDto studyroomDto);
-  public MemberDto getHostnicknameByStudyroomInfo(int studyroomId);
+  public MemberDto getHostInfoByStudyroomId(int studyroomId);
   public void insertMemberIds(StudyroomDto studyroomDto);
   public StudyroomDto selectStudyroomById(int id);
   public List<ProblemDto> selectProblemByStudyroomId(int id);

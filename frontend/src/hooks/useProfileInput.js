@@ -1,8 +1,8 @@
-import checkReg from 'libs/regExp'
 import { useEffect, useState } from 'react'
-import axios from 'libs/axios'
-import api from 'constants/api'
 import { useSelector } from 'react-redux'
+import api from 'constants/api'
+import axios from 'libs/axios'
+import checkReg from 'libs/regExp'
 import useDebounce from 'hooks/useDebounce'
 
 /* 
@@ -117,7 +117,7 @@ export function useProfileInput(
         return
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputValue])
+  }, [debouncedInputValue])
 
   return [inputValue, setInputValue, message, isChanged]
 }

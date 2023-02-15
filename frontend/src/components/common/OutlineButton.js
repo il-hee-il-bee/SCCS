@@ -3,8 +3,9 @@ import styled from 'styled-components'
 import PropTypes from 'prop-types'
 
 /*
-기본 버튼 컴포넌트
+기본 아웃라인 버튼 컴포넌트
 
+id: 버튼의 id
 size: 버튼 사이즈
 type: 버튼 색깔
 onClick: 클릭 시 동작
@@ -13,6 +14,7 @@ disabled: 버튼 클릭 가능 여부
 */
 
 export default function OutlineButton({
+  id,
   size,
   type,
   onClick,
@@ -30,10 +32,11 @@ export default function OutlineButton({
 
   return (
     <StyledButton
+      id={id}
       className={`${sizeClass}`}
       type={type}
-      onClick={onClick}
       disabled={disabled}
+      onClick={onClick}
     >
       {value}
     </StyledButton>
@@ -41,6 +44,7 @@ export default function OutlineButton({
 }
 
 OutlineButton.propTypes = {
+  id: PropTypes.string,
   size: PropTypes.oneOf(['tiny', 'small', 'medium', 'large']), // 버튼 크기
   type: PropTypes.oneOf(['primary', 'secondary', 'tertiary', 'gray', 'danger']), // 버튼 커스터마이징 (글자색, 배경색, border-radius)
   onClick: PropTypes.func,
@@ -49,6 +53,7 @@ OutlineButton.propTypes = {
 }
 
 OutlineButton.defaultProps = {
+  id: null,
   size: 'medium',
   type: 'primary',
   onClick: undefined,
@@ -62,16 +67,15 @@ const StyledButton = styled.button`
   justify-content: center;
   align-items: center;
 
+  border: 3px solid ${({ theme, type }) => theme[`${type}Color`]};
   border-radius: 10px;
 
+  color: ${({ theme, type }) => theme[`${type}Color`]};
   text-align: center;
   font-weight: 600;
   white-space: nowrap;
 
   transition: background-color ease 0.1s;
-
-  border: 3px solid ${({ theme, type }) => theme[`${type}Color`]};
-  color: ${({ theme, type }) => theme[`${type}Color`]};
 
   &:hover {
     background-color: ${({ theme, type }) => theme[`${type}Color`]};
@@ -83,11 +87,11 @@ const StyledButton = styled.button`
     width: 1.7rem;
     height: 1.7rem;
     border-radius: 50%;
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
   &.sm-outbtn {
-    padding: 0.3rem 0.8rem;
-    font-size: 1.1rem;
+    padding: 0.2rem 0.7rem;
+    font-size: 1rem;
   }
   &.md-outbtn {
     padding: 0.4rem 0.9rem;

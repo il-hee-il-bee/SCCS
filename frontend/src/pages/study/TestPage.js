@@ -1,24 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import styled from 'styled-components'
-import { useOutletContext } from 'react-router-dom'
 import { Resizable } from 're-resizable'
-
-// import Footer from 'components/study/Footer'
-import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'libs/axios'
+import { useOutletContext, useNavigate } from 'react-router-dom'
+import { useWindowHeight } from 'hooks/useWindowHeight'
 import api from 'constants/api'
-
+import axios from 'libs/axios'
+import Timer from 'components/study/Timer'
 import Button from 'components/common/Button'
-import Textarea from 'components/study/Textarea'
-import { algorithmPk, languagePk } from 'constants/pk'
-import useInterval from 'hooks/useInterval'
-import OutlineButton from 'components/common/OutlineButton'
-import ProblemImage from 'components/common/ProblemImage'
-import CodeSection from 'components/study/CodeSection'
-
-import RoomInfo from 'components/study/RoomInfo'
-import ResultSection from 'components/study/ResultSection'
 import Loading from 'components/common/Loading'
+import RoomInfo from 'components/study/RoomInfo'
+import CodeSection from 'components/study/CodeSection'
+import ProblemImage from 'components/common/ProblemImage'
+import ResultSection from 'components/study/ResultSection'
+
+const initialCode = {
+  1: `class Solution:
+  print("sccs")
+`,
+  2: `class Solution{
+  public static void main(String[] args) {
+    System.out.println("sccs");
+  }
+}
+`,
+}
 
 export default function TestPage() {
   const {
@@ -26,50 +31,42 @@ export default function TestPage() {
     studyroomId,
     roomInfo,
     stomp,
-    connected,
     members,
-    setMembers,
     problems,
     setProblems,
-    message,
-    setMessage,
-    chatList,
-    sendChat,
-    disconnect,
+    setIsMicOn,
   } = useOutletContext()
 
+  // 리액트 훅 관련 함수 선언
   const navigate = useNavigate()
+  const windowHeight = useWindowHeight() // window의 innerHeight를 반환하는 커스텀 훅
 
+  // useState
   const [subscription, setSubscription] = useState(null)
 
   const [problemIdx, setProblemIdx] = useState(0) // 현재 선택된 문제의 인덱스
+
+  const [languageId, setLanguageId] = useState(roomInfo.languageIds[0])
+  const [code, setCode] = useState(initialCode[languageId]) // langaugaeId 다음에 선언
+  const [testResult, setTestResult] = useState(null)
+
   const [finished, setFinished] = useState(false)
   const [finishedList, setFinishedList] = useState([])
-  const [languageId, setLanguageId] = useState(roomInfo.languageIds[0])
 
-  const initialCode = (languageId === 1) 
-    ? `class Solution:
-      print("sccs")
-    ` 
-    : `class Solution{
-      public static void main(String[] args) {
-        System.out.println("sccs");
-      }
-    }
-    `
-  const [code, setCode] = useState(initialCode);
-  //const [code, setCode] = useState('')
+  const [onSubmitButton, setOnSubmitButoon] = useState(false)
+  const [onTestButton, setOnTestButoon] = useState(false)
 
-  // 남은 시간 표시하기 위한 state
-  const [timer, setTimer] = useState(2 * 60 * 60)
-
-  const [testResult, setTestResult] = useState(null)
+  // 코딩테스트 페이지 입장 시 마이크 뮤트
+  useEffect(() => {
+    setIsMicOn(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 코딩테스트 페이지 입장 시 axios 요청
   useEffect(() => {
     const data = {
       id: studyroomId,
-      nickname: user.nickname,
+      memberId: user.id,
       memberIds: members,
     }
     const [url, method] = api('codingTest')
@@ -79,13 +76,21 @@ export default function TestPage() {
         setProblems(res.data.problems)
       })
       .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 문제 번호나, 언어 변경 시 초기화
+  useEffect(() => {
+    setCode(initialCode[languageId])
+    setTestResult(null)
+  }, [problemIdx, languageId])
 
   // 모두 시험을 종료하면 테스트 페이지로 이동
   useEffect(() => {
     if (finishedList.length === members.length) {
       navigate(`/room/${studyroomId}/study`)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finishedList])
 
   // 웹 소켓 send: 시험 종료
@@ -96,6 +101,7 @@ export default function TestPage() {
       JSON.stringify({
         status: 'study',
         studyroomId: studyroomId,
+        id: user.id,
         nickname: user.nickname,
       }),
     )
@@ -115,20 +121,19 @@ export default function TestPage() {
     return () => {
       subscription && subscription.unsubscribe()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 타이머
-  useInterval(() => setTimer((timer) => timer - 1), 1000)
-
-  useEffect(() => {
-    if (timer <= 0) {
-      navigate(`/room/${studyroomId}/study`)
-    }
-  }, [timer])
-
-  // 코드 제출
+  // 코드 제출 함수. type = 'test' or 'submit'
   const submitCode = (type) => {
     const apiKey = type === 'submit' ? 'submitCode' : 'testCode'
+    if (type === 'submit') {
+      setOnTestButoon(false)
+      setOnSubmitButoon(true)
+    } else {
+      setOnSubmitButoon(false)
+      setOnTestButoon(true)
+    }
     const codeString = code
     const formData = new FormData()
     formData.append('formFile', new Blob([codeString], { type: 'text/plain' }))
@@ -136,8 +141,6 @@ export default function TestPage() {
     formData.append('studyroomId', studyroomId)
     formData.append('problemId', problems[problemIdx].id)
     formData.append('languageId', languageId)
-    // formData.append('problemId', 16)
-    // formData.append('languageId', 2)
     const headers = { 'Content-Type': 'multipart/form-data' }
     const [url, method] = api(apiKey)
     const config = { url, method, data: formData, headers }
@@ -153,33 +156,37 @@ export default function TestPage() {
       {problems ? (
         <Container>
           <FlexBox>
-            <RoomInfo
-              id={roomInfo.id}
-              title={roomInfo.title}
-              languageIds={roomInfo.languageIds}
-              algoIds={roomInfo.algoIds}
-              hostNickname={roomInfo.hostNickname}
-              personnel={roomInfo.personnel}
+            <ButtonWrapper>
+              <RoomInfo
+                id={roomInfo.id}
+                title={roomInfo.title}
+                languageIds={roomInfo.languageIds}
+                algoIds={roomInfo.algoIds}
+                hostNickname={roomInfo.hostNickname}
+                personnel={roomInfo.personnel}
+              />
+              {[...Array(problems.length).keys()].map((idx) => {
+                return (
+                  <Button
+                    key={`${idx}-problem`}
+                    size="small"
+                    value={idx + 1}
+                    type={problemIdx === idx ? 'primary' : 'secondary'}
+                    onClick={() => setProblemIdx(idx)}
+                  />
+                )
+              })}
+            </ButtonWrapper>
+            <Timer
+              sec={2 * 60 * 60}
+              onZero={() => {
+                navigate(`/room/${studyroomId}/study`)
+              }}
             />
-            {[...Array(problems.length).keys()].map((idx) => {
-              return (
-                <Button
-                  key={`${idx}-problem`}
-                  size="medium"
-                  value={idx + 1}
-                  type={problemIdx === idx ? 'primary' : 'secondary'}
-                  onClick={() => setProblemIdx(idx)}
-                />
-              )
-            })}
-            <StyledDiv>
-              {parseInt(timer / (60 * 60))}:{parseInt((timer / 60) % 60)}:
-              {parseInt(timer % 60)}
-            </StyledDiv>
           </FlexBox>
           <FlexBox2>
-            <ImageWrapper>
-              <ProblemImage imgUrl={problems[problemIdx].problemImageUrl} />
+            <ImageWrapper height={windowHeight - 120}>
+              <ProblemImage src={problems[problemIdx].problemImageUrl} />
             </ImageWrapper>
             <Resizable
               defaultSize={{ width: '50%', height: '100%' }}
@@ -196,7 +203,7 @@ export default function TestPage() {
                 topLeft: false,
               }}
             >
-              <FlexColumn>
+              <FlexColumn height={windowHeight - 120}>
                 <CodeSection
                   value={code}
                   setValue={setCode}
@@ -205,7 +212,7 @@ export default function TestPage() {
                   setLanguageId={setLanguageId}
                 />
                 <Resizable
-                  defaultSize={{ width: '100%', height: '37%' }}
+                  defaultSize={{ width: '100%', height: '40%' }}
                   minHeight={'20%'}
                   maxHeight={'80%'}
                   enable={{
@@ -229,6 +236,8 @@ export default function TestPage() {
                     submit={() => {
                       submitCode('submit')
                     }}
+                    onSubmitButton={onSubmitButton}
+                    onTestButton={onTestButton}
                   />
                 </Resizable>
               </FlexColumn>
@@ -246,6 +255,7 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
+
   height: 100%;
 
   padding: 1rem;
@@ -257,24 +267,25 @@ const FlexBox = styled.div`
 const FlexBox2 = styled.div`
   display: flex;
   justify-content: space-between;
-  height: 100%;
+  gap: 5px;
 `
 
 const FlexColumn = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100%;
+  gap: 5px;
+
+  height: ${({ height }) => height}px;
 `
 const ImageWrapper = styled.div`
-  height: 100%;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+
+  height: ${({ height }) => height}px;
+  background-color: ${({ theme }) => theme.whiteColor};
 `
 
-const StyledDiv = styled.div`
+const ButtonWrapper = styled.div`
   display: flex;
-  align-items: center;
-  padding: 0.2rem 0.7rem;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: bold;
-  background-color: ${({ theme }) => theme.studyBgColor};
+  gap: 10px;
 `

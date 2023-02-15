@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-
+import React, { useEffect, useState } from 'react'
 import styled from 'styled-components'
-import { useOutletContext } from 'react-router-dom'
-
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useWindowHeight } from 'hooks/useWindowHeight'
+import Chat from 'components/study/Chat'
 import Button from 'components/common/Button'
 import RoomInfo from 'components/study/RoomInfo'
-import Chat from 'components/study/Chat'
+import Announcement from 'components/study/Announcement'
 
 export default function WaitingPage() {
   const {
@@ -14,23 +13,24 @@ export default function WaitingPage() {
     studyroomId,
     roomInfo,
     stomp,
-    connected,
-    members,
     setMembers,
-    problems,
-    setProblems,
     message,
     setMessage,
     chatList,
     sendChat,
-    disconnect,
+    isVideos,
   } = useOutletContext()
-  const navigate = useNavigate()
 
+  // 리액트 훅 관련 함수 선언
+  const navigate = useNavigate()
+  const windowHeight = useWindowHeight() // window의 innerHeight를 반환하는 커스텀 훅
+
+  // useState
   const [ready, setReady] = useState(false)
   const [readyList, setReadyList] = useState([])
   const [subscription, setSubscription] = useState(null)
 
+  // Ready Button을 토글하는 함수
   const toggleReady = () => {
     const newReady = !ready
     setReady(newReady)
@@ -45,6 +45,7 @@ export default function WaitingPage() {
       JSON.stringify({
         status: 'ready',
         studyroomId: studyroomId,
+        id: user.id,
         nickname: user.nickname,
         ready: ready,
       }),
@@ -60,13 +61,14 @@ export default function WaitingPage() {
       JSON.stringify({
         status: 'start',
         studyroomId: studyroomId,
+        id: user.id,
         nickname: user.nickname,
-        membersNickname: [...readyList, user.nickname],
+        memberIds: [...readyList, user.id],
       }),
     )
   }
 
-  // 웹 소켓 subscribe
+  // 웹 소켓 subscribe 함수
   useEffect(() => {
     setSubscription(
       stomp.subscribe('/sub/studyroom/' + studyroomId, (chatDto) => {
@@ -74,17 +76,17 @@ export default function WaitingPage() {
         if (content.status === 'ready') {
           // 준비 되었을 경우
           if (content.ready) {
-            setReadyList((readyList) => [...readyList, content.nickname])
+            setReadyList((readyList) => [...readyList, content.id])
             return
           }
           // 준비되지 않았을 경우
           setReadyList((readyList) =>
-            readyList.filter((nickname) => nickname !== content.nickname),
+            readyList.filter((nickname) => nickname !== content.id),
           )
           return
         }
         if (content.status === 'start') {
-          setMembers(content.membersNickname)
+          setMembers(content.memberIds)
           navigate(`/room/${studyroomId}/test`)
         }
       }),
@@ -92,6 +94,7 @@ export default function WaitingPage() {
     return () => {
       subscription && subscription.unsubscribe()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -109,6 +112,7 @@ export default function WaitingPage() {
           <Button
             onClick={sendStart}
             type="primary"
+            size="small"
             value={
               roomInfo.personnel === readyList.length + 1
                 ? '테스트 시작'
@@ -122,18 +126,23 @@ export default function WaitingPage() {
           <Button
             onClick={toggleReady}
             type="primary"
+            size="small"
             value={ready ? 'Ready 취소' : 'Ready'}
           />
         )}
       </FlexBox>
-      <FlexBox2>
-        <StyledDiv>안내사항</StyledDiv>
+      <FlexBox2 height={isVideos ? windowHeight - 280 : windowHeight - 120}>
+        <Announcement
+          languageIds={roomInfo.languageIds}
+          algoIds={roomInfo.algoIds}
+        ></Announcement>
         <Chat
           chatList={chatList}
           message={message}
           onChangeMsg={(e) => setMessage(e.target.value)}
           sendChat={sendChat}
-          user={user}
+          nickname={user.nickname}
+          offset={isVideos ? 1000 : 500}
         />
       </FlexBox2>
     </Container>
@@ -155,18 +164,9 @@ const FlexBox = styled.div`
 `
 
 const FlexBox2 = styled.div`
-  height: 100%;
   display: flex;
   justify-content: space-between;
+  max-height: ${({ height }) => height}px;
   gap: 10px;
-`
-const StyledDiv = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  background-color: ${({ theme }) => theme.studyBgColor};
+  height: 100%;
 `

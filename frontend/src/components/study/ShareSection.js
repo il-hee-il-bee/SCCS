@@ -1,42 +1,48 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
+import PropTypes from 'prop-types'
 import styled from 'styled-components'
 import { FaEraser } from 'react-icons/fa'
+import Code from 'components/study/Code'
 import IconButton from 'components/common/IconButton'
 
 /*
-Dropbox 우측의 아래 버튼 아이콘 클릭 시, 체크박스 옵션들이 보여지는 컴포넌트
+스터디 페이지에서 공유되는 화면, 코드 위에 그림판 canvas가 겹쳐 있음
 
-title: 옵션들의 제목
-opitions: {key: value}형태의 옵션. vlaue의 값이 Label로 체크박스 옆에 display
-onChange: 클릭 시 동작할 함수
+code: 뒷편에 띄울 code 문자열.
+languageId: code의 언어 pk.
 */
 
-export default function ShareSection({ screenContent }) {
+export default function ShareSection({ code, languageId }) {
   // canvas
   const canvasBoardRef = useRef()
   const cavasContainerRef = useRef()
   const colorPickRefs = useRef([])
-
   const resetRef = useRef()
 
-  // 색 버튼
-  const colors = [
-    '#c0392b',
-    // '#e67e22',
-    '#f1c40f',
-    '#2ecc71',
-    '#3498db',
-    // 'blueviolet',
-    // '#e84393',
-    '#2c3e50',
-  ]
+  // 캔버스의 크기를 윈도우 사이즈에 따라 동적을 조절
+  const [windowHeight, setWindowHeight] = useState(0)
+  useEffect(() => {
+    const updateMaxHeight = () => {
+      setWindowHeight(window.innerHeight)
+    }
+
+    window.addEventListener('resize', updateMaxHeight)
+    updateMaxHeight()
+
+    return () => {
+      window.removeEventListener('resize', updateMaxHeight)
+    }
+  }, [])
+
+  // 색깔
+  const colors = ['#c0392b', '#f1c40f', '#2ecc71', '#3498db', '#2c3e50']
 
   useEffect(() => {
     let dataChannel
     let context
     let painting = false
     let pickedColor = '#2c3e50'
-    let lineWidth = 4
+    let lineWidth = 3
 
     // 그림판 생성
     const makeCanvas = () => {
@@ -65,7 +71,7 @@ export default function ShareSection({ screenContent }) {
       if (colorPickRefs.current) {
         colorPickRefs.current.map((element) =>
           element.addEventListener('click', (e) => {
-            lineWidth = 4
+            lineWidth = 3
             if (e.target) {
               pickedColor = e.target.id
             }
@@ -82,27 +88,6 @@ export default function ShareSection({ screenContent }) {
             canvasBoardRef.current.width,
             canvasBoardRef.current.height,
           )
-          context.fillStyle = 'white'
-          context.fillRect(
-            0,
-            0,
-            canvasBoardRef.current.width,
-            canvasBoardRef.current.height,
-          )
-          const [type, content] = screenContent
-          if (type === 'code') {
-            context.lineWidth = '0.1px'
-            context.strokeStyle = 'black'
-            context.font = '1rem serif'
-            context.strokeText(content, 10, 10)
-          } else {
-            const problemImage = new Image(
-              canvasBoardRef.current.width,
-              canvasBoardRef.current.height,
-            )
-            problemImage.src = content
-            context.drawImage(problemImage, 0, 0)
-          }
         }
       }
     }
@@ -160,89 +145,103 @@ export default function ShareSection({ screenContent }) {
     }
 
     makeCanvas()
-  }, [screenContent])
+  }, [windowHeight])
+
   return (
-    <CanvasContainer ref={cavasContainerRef}>
-      <CanvasBoard ref={canvasBoardRef} id="code-with-drawing"></CanvasBoard>
-      <ColorsPickBox>
-        {colors.map((color, i) => {
-          return (
-            <ColorPick
-              id={color}
-              key={i}
-              color={color}
-              ref={(element) => {
-                if (element) {
-                  colorPickRefs.current[i] = element
-                }
-              }}
-            />
-          )
-        })}
-        <Reset ref={resetRef}>
-          <IconButton icon={<FaEraser />} />
-        </Reset>
-      </ColorsPickBox>
-    </CanvasContainer>
+    <Container windowHeight={windowHeight}>
+      <CanvasContainer ref={cavasContainerRef}>
+        <CanvasBoard ref={canvasBoardRef} id="code-with-drawing"></CanvasBoard>
+        <ColorsPickBox>
+          {colors.map((color, i) => {
+            return (
+              <ColorPick
+                id={color}
+                key={i}
+                color={color}
+                ref={(element) => {
+                  if (element) {
+                    colorPickRefs.current[i] = element
+                  }
+                }}
+              />
+            )
+          })}
+          <Reset ref={resetRef}>
+            <IconButton icon={<FaEraser />} />
+          </Reset>
+        </ColorsPickBox>
+      </CanvasContainer>
+      <CodeWrapper>
+        <Code languageId={languageId} value={code} />
+      </CodeWrapper>
+    </Container>
   )
 }
 
+ShareSection.propTypes = {
+  code: PropTypes.string.isRequired,
+  languageId: PropTypes.number.isRequired,
+}
+
+const Container = styled.div`
+  position: relative;
+
+  width: 100%;
+  height: ${({ windowHeight }) => `calc(${windowHeight}px - 130px)`};
+
+  border-radius: 0.5rem;
+`
 const CanvasContainer = styled.div`
   position: relative;
 
-  overflow: auto;
+  width: 100%;
+  height: 100%;
 
   border: 1px solid rgba(0, 0, 0, 0.1);
-
-  height: 100%;
-  width: 100%;
-  border-radius: 0.5rem;
+  z-index: 3;
 `
 const CodeWrapper = styled.div`
   position: absolute;
+
+  top: 0rem;
+  left: 0rem;
+
+  width: 100%;
+  height: 100%;
+
+  z-index: 2;
 `
 
 const CanvasBoard = styled.canvas`
-  height: 100%;
   width: 100%;
+  height: 100%;
 
-  background-color: ${({ theme }) => theme.studyBgColor};
+  z-index: 4;
 `
 
 const ColorsPickBox = styled.div`
-  position: absolute;
-  right: 0rem;
-  bottom: 0.5rem;
   display: flex;
   align-items: right;
   justify-content: right;
+
+  position: absolute;
+  right: 0rem;
+  bottom: 0.5rem;
+
   gap: 10px;
 `
 const ColorPick = styled.div`
-  cursor: pointer;
+  z-index: 5;
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  z-index: 5;
   background-color: ${(props) => props.color};
+  cursor: pointer;
 `
 
-const Eraser = styled.div`
-  cursor: pointer;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-right: -5px;
-`
 const Reset = styled.div`
-  cursor: pointer;
   width: 30px;
   height: 30px;
-`
-const Img = styled.img`
-  width: 100%;
-  height: 100%;
+  z-index: 5;
+  cursor: pointer;
 `

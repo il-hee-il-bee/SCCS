@@ -1,11 +1,8 @@
 import React, { useEffect, useRef } from 'react'
-import { Publisher } from 'openvidu-browser'
-
-// import OpenViduVideoComponent from './OvVideo'
 import styled from 'styled-components'
 
 export default function VideoComponent({ streamManager }) {
-  // Gets the nickName of the user
+  // streamManager로부터 닉네임을 가져오는 함수
   const getNicknameTag = JSON.parse(
     streamManager.stream.connection.data,
   ).clientData
@@ -24,6 +21,7 @@ export default function VideoComponent({ streamManager }) {
     if (streamManager && !!videoRef) {
       streamManager.addVideoElement(videoRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -39,12 +37,22 @@ export default function VideoComponent({ streamManager }) {
 }
 
 const Container = styled.div`
-  width: 100%;
-  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+
+  overflow: hidden;
+
   position: relative;
+
+  width: 100%;
+  min-width: 700px;
+  height: 100%;
+
+  border-radius: 0.5rem;
 `
 const Video = styled.video`
-  width: 100%;
+  width: auto;
   height: 100%;
   border-radius: 0.5rem;
 `
@@ -54,11 +62,11 @@ const StyledP = styled.p`
   left: 0;
   z-index: 1;
 
-  border-radius: 0.5rem 0rem 0rem 0rem;
-
   padding: 0.2rem;
+
+  border-radius: 0.5rem 0rem 0rem 0rem;
+  background-color: #ffffff50;
+
   font-size: 0.8rem;
   color: ${({ theme }) => theme.grayFontColor};
-
-  background-color: #ffffff50;
 `

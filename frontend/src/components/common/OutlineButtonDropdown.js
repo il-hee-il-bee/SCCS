@@ -1,0 +1,106 @@
+import React, { useState } from 'react'
+import PropTypes from 'prop-types'
+import styled from 'styled-components'
+import OutlineButton from 'components/common/OutlineButton'
+
+/*
+클릭시 버튼 옵션들이 아래로 나타나는 컴포넌트
+
+title: 옵션들의 제목
+size: Button Component의 사이즈
+type: Button Component의 색깔 
+options: {key: value}형태의 옵션 객체. 버튼의 id = "key-value". 버튼의 글씨 = value.
+onClick: 클릭 시 동작할 함수
+*/
+
+export default function OutlineButtonDropdown({
+  title,
+  size,
+  type,
+  options,
+  onClick,
+}) {
+  // 옵션 버튼들의 display 여부
+  const [showOptions, setShowOptions] = useState(false)
+
+  // 버튼 사이즈에 따라 옵션 버튼들의 위치 조정
+  const top =
+    size === 'tiny'
+      ? '2rem'
+      : size === 'small'
+      ? '3rem'
+      : size === 'medium'
+      ? '3.5rem'
+      : '4rem'
+
+  const handleClick = (e) => {
+    setShowOptions(false)
+    onClick(e)
+  }
+
+  return (
+    <Container>
+      <OutlineButton
+        size={size}
+        type={type}
+        value={title}
+        onClick={() => setShowOptions(!showOptions)}
+      />
+      <OptionWrapper display={showOptions ? 'flex' : 'none'} top={top}>
+        {Object.keys(options).map((key) => (
+          <OutlineButton
+            key={key + '-' + options[key].toString()}
+            id={key + '-' + options[key].toString()}
+            size={size}
+            type={type}
+            value={options[key]}
+            onClick={handleClick}
+          />
+        ))}
+      </OptionWrapper>
+    </Container>
+  )
+}
+
+OutlineButtonDropdown.propTypes = {
+  title: PropTypes.string.isRequired,
+  size: PropTypes.oneOf(['tiny', 'small', 'medium', 'large']), // 버튼 크기
+  type: PropTypes.oneOf(['primary', 'secondary', 'tertiary', 'gray', 'danger']), // 버튼 커스터마이징 (글자색, 배경색, border-radius)
+  options: PropTypes.object.isRequired,
+  onClick: PropTypes.func,
+}
+
+OutlineButtonDropdown.defaultProps = {
+  size: 'medium',
+  type: 'primary',
+  onClick: undefined,
+}
+
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const OptionWrapper = styled.div`
+  display: ${({ display }) => display};
+  flex-direction: column;
+  gap: 10px;
+
+  position: absolute;
+  top: ${({ top }) => top};
+
+  z-index: 6;
+
+  animation: 0.5s ease-in-out forwards dropdown;
+  @keyframes dropdown {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, -100%, 0);
+    }
+    100% {
+      opacity: 1;
+      transform: translateZ(0);
+    }
+  }
+`

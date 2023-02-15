@@ -1,6 +1,6 @@
 import React from 'react'
-import styled from 'styled-components'
 import PropTypes from 'prop-types'
+import styled from 'styled-components'
 import ProfileImg from 'components/common/ProfileImg'
 
 /*
@@ -29,7 +29,7 @@ export default function ChatItem({ nickname, profileImage, message, isMine }) {
 
 ChatItem.propTypes = {
   nickname: PropTypes.string.isRequired,
-  profileImage: PropTypes.string.isRequired,
+  profileImage: PropTypes.oneOf(PropTypes.string, PropTypes.number).isRequired,
   message: PropTypes.string.isRequired,
   isMine: PropTypes.bool,
 }
@@ -39,10 +39,11 @@ ChatItem.defaultProps = {
 }
 
 const Container = styled.div`
-  align-self: ${({ isMine }) => (isMine ? 'flex-start' : 'flex-end')};
   display: flex;
   flex-direction: ${({ isMine }) => (isMine ? 'row-reverse' : 'row')};
+  align-self: ${({ isMine }) => (isMine ? 'flex-start' : 'flex-end')};
   gap: 10px;
+
   width: 100%;
   margin: 0.4rem 0rem;
 `
@@ -56,9 +57,9 @@ const FlexBox = styled.div`
 
 const StyledDiv = styled.div`
   padding: 0.5rem 0.7rem;
+  max-width: 20rem;
   border-radius: 0.5rem;
-  color: ${({ theme }) => theme.blackFontColor};
   background-color: ${({ isMine, theme }) =>
     isMine ? theme.lightSecondaryColor : '#FFFFFF80'};
-  max-width: 20rem;
+  color: ${({ theme }) => theme.blackFontColor};
 `

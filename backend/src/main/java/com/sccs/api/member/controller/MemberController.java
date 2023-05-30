@@ -26,7 +26,9 @@ import javax.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -118,8 +120,8 @@ public class MemberController {
                 (HOUR * 8));
 
         // 쿠키 생성
-        Cookie accessTokenCookie = cookieService.createCookie("accessToken", accessToken);
-        Cookie refreshTokenCookie = cookieService.createCookie("refreshToken", refreshToken);
+        ResponseCookie accessTokenCookie = cookieService.createCookie("accessToken", accessToken);
+        ResponseCookie refreshTokenCookie = cookieService.createCookie("refreshToken", refreshToken);
 
         // Redis에 리프레쉬 토큰 저장
         try {
@@ -130,8 +132,12 @@ public class MemberController {
           logger.error("[login]레디스 값 저장 실패, {}", e.getMessage());
           return new ResponseEntity<>(resultmap, HttpStatus.BAD_GATEWAY);
         }
-        response.addCookie(accessTokenCookie);
-        response.addCookie(refreshTokenCookie);
+
+
+        response.setHeader("Set-Cookie", accessTokenCookie.toString());
+        response.setHeader("Set-Cookie", refreshTokenCookie.toString());
+//        response.addCookie(accessTokenCookie);
+//        response.addCookie(refreshTokenCookie);
 
         logger.debug("[login]로그인 성공");
         resultmap.put(MESSAGE, "성공");
@@ -368,10 +374,12 @@ public class MemberController {
 //        long exp = System.currentTimeMillis() + (MINUTE * 30);
 
         // 토큰 생성
-        Cookie accessTokenCookie = cookieService.createCookie("accessToken", newAccessToken);
+        //Cookie accessTokenCookie = cookieService.createCookie("accessToken", newAccessToken);
+        ResponseCookie accessTokenCookie = cookieService.createCookie("accessToken", newAccessToken);
 
         // 엑세스 토큰 세팅
-        response.addCookie(accessTokenCookie);
+        //response.addCookie(accessTokenCookie);
+        response.setHeader("Set-Cookie", accessTokenCookie.toString());
 
         resultMap.put(MESSAGE, SUCCESS);
 //        resultMap.put("expiration", exp);

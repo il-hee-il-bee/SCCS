@@ -34,7 +34,7 @@ public class RedisService {
     long EXP_TIME_MINUTE = 1 * 60; // 1분
     long EXP_TIME_HOUR   = EXP_TIME_MINUTE * 60; // 1시간
 
-    stringRedisTemplate.expire(key, EXP_TIME_HOUR * 10, TimeUnit.SECONDS); // 유효기간 10시간
+    stringRedisTemplate.expire(key, EXP_TIME_HOUR * 10, TimeUnit.MILLISECONDS); // 유효기간 10시간
     logger.debug("[setRefreshTokenWithRedis] key : {}, value : {}, 유효시간 : {}분", key, value,
         EXP_TIME_MINUTE);
   }

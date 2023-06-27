@@ -24,6 +24,7 @@ isFinished: 종료 여부를 나타내는 Bool. FInish 버튼의 텍스트를 �
 finish: 종료 버튼 클릭 시 동작하는 함수
 test: 테스트 버튼 클릭 시 동작하는 함수
 submit: 제출 버튼 클릭 시 동작하는 함수
+isSubmit: results가 테스트의 결과인지 submit의 결과인지 구분하는 Boolean
 */
 
 export default function ResultSection({
@@ -32,8 +33,7 @@ export default function ResultSection({
   finish,
   test,
   submit,
-  onSubmitButton,
-  onTestButton,
+  isSubmit,
 }) {
   return (
     <Container>
@@ -41,34 +41,29 @@ export default function ResultSection({
         <H4>결과창</H4>
         {results && (
           <>
-            {onSubmitButton && null}
-            {onTestButton &&
-              results.resultList.slice(0, 3).map((problem, index) => (
-                <p
-                  className={problem.result ? 'c pass' : 'c error'}
-                  key={`${index}-problem-result`}
-                >
-                  {index + 1}번{') '} {problem.message} : {problem.memory}MB
-                  {' / '}
-                  {problem.runtime}s
-                </p>
-              ))}
+            {isSubmit
+              ? null
+              : results.resultList.slice(0, 3).map((problem, index) => (
+                  <p
+                    className={problem.result ? 'c pass' : 'c error'}
+                    key={`${index}-problem-result`}
+                  >
+                    {index + 1}번{') '} {problem.message} : {problem.runtime}s
+                  </p>
+                ))}
 
-            {/*  */}
             {results.isAnswer ? (
               <p className="pass ">
                 <br />
                 통과했습니다.
-                <br /> 런타임 평균: {results.avgRuntime}s 메모리 평균:
-                {results.avgMemory}MB
+                <br /> 런타임 평균: {results.avgRuntime}s
               </p>
             ) : (
               <>
                 <p className="error c">
                   <br />
                   틀렸습니다.
-                  <br /> 런타임 평균: {results.avgRuntime}s 메모리 평균:
-                  {results.avgMemory}MB
+                  <br /> 런타임 평균: {results.avgRuntime}s
                 </p>
               </>
             )}
@@ -86,7 +81,7 @@ export default function ResultSection({
 }
 
 ResultSection.propTypes = {
-  results: PropTypes.array,
+  results: PropTypes.object,
   isFinished: PropTypes.bool,
   finish: PropTypes.func,
   test: PropTypes.func,
@@ -94,7 +89,7 @@ ResultSection.propTypes = {
 }
 
 ResultSection.defaultProps = {
-  results: [],
+  results: {},
   isFinished: false,
   finish: undefined,
   test: undefined,

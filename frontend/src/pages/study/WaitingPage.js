@@ -1,34 +1,44 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import styled from 'styled-components'
+import { useDispatch } from 'react-redux'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useWindowHeight } from 'hooks/useWindowHeight'
+import { setReduxMembers } from 'redux/roomSlice'
 import Chat from 'components/study/Chat'
 import Button from 'components/common/Button'
 import RoomInfo from 'components/study/RoomInfo'
 import Announcement from 'components/study/Announcement'
 
 export default function WaitingPage() {
+  // props
   const {
     user,
     studyroomId,
     roomInfo,
     stomp,
-    setMembers,
+    setMemberObject,
     message,
     setMessage,
     chatList,
     sendChat,
     isVideos,
+    readyNicknameObject,
+    setReadyNicknameObject,
   } = useOutletContext()
 
   // 리액트 훅 관련 함수 선언
+  const dispatch = useDispatch()
   const navigate = useNavigate()
   const windowHeight = useWindowHeight() // window의 innerHeight를 반환하는 커스텀 훅
 
   // useState
   const [ready, setReady] = useState(false)
-  const [readyList, setReadyList] = useState([])
+  const [readyObject, setReadyObject] = useState({})
   const [subscription, setSubscription] = useState(null)
+
+  const readyList = useMemo(() => {
+    return Object.keys(readyObject)
+  }, [readyObject])
 
   // Ready Button을 토글하는 함수
   const toggleReady = () => {
@@ -55,6 +65,8 @@ export default function WaitingPage() {
   // 웹 소켓 send: 테스트 시작
   const sendStart = () => {
     if (roomInfo.hostId !== user.id) return
+    readyObject[user.id] = true
+    const memberIds = Object.keys(readyObject)
     stomp.send(
       '/pub/studyroom',
       {},
@@ -63,7 +75,7 @@ export default function WaitingPage() {
         studyroomId: studyroomId,
         id: user.id,
         nickname: user.nickname,
-        memberIds: [...readyList, user.id],
+        memberIds: memberIds,
       }),
     )
   }
@@ -76,17 +88,41 @@ export default function WaitingPage() {
         if (content.status === 'ready') {
           // 준비 되었을 경우
           if (content.ready) {
-            setReadyList((readyList) => [...readyList, content.id])
+            setReadyObject((readyObject) => {
+              const newReadyObject = { ...readyObject }
+              newReadyObject[content.id] = true
+              return newReadyObject
+            })
+            if (roomInfo.hostId !== user.id) return
+            setReadyNicknameObject((readyNicknameObject) => {
+              const newReadyNicknameObject = { ...readyNicknameObject }
+              newReadyNicknameObject[content.nickname] = true
+              return newReadyNicknameObject
+            })
             return
           }
           // 준비되지 않았을 경우
-          setReadyList((readyList) =>
-            readyList.filter((nickname) => nickname !== content.id),
-          )
+          setReadyObject((readyObject) => {
+            const newReadyObject = { ...readyObject }
+            delete newReadyObject[content.id]
+            return newReadyObject
+          })
+          if (roomInfo.hostId !== user.id) return
+          setReadyNicknameObject((readyNicknameObject) => {
+            const newReadyNicknameObject = { ...readyNicknameObject }
+            delete newReadyNicknameObject[content.nickname]
+            return newReadyNicknameObject
+          })
           return
         }
         if (content.status === 'start') {
-          setMembers(content.memberIds)
+          const memberObject = {}
+          content.memberIds.forEach((memberId) => {
+            memberObject[memberId] = true
+          })
+          setMemberObject(memberObject)
+          dispatch(setReduxMembers(memberObject))
+          setReadyNicknameObject({})
           navigate(`/room/${studyroomId}/test`)
         }
       }),

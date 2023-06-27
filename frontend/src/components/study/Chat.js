@@ -21,15 +21,17 @@ export default function Chat({
             nickname={chatItem.nickname}
             profileImage={chatItem.profileImage}
             message={chatItem.message}
+            score={chatItem.score}
             isMine={chatItem.nickname === nickname ? true : false}
           />
         ))}
       </ChatContainer>
       <StyledDiv>
         <StyledInput
+          id="chat-input"
           value={message}
           onKeyUp={(e) => {
-            if (e.key === 'Enter' && e.target.value.trim()) {
+            if (e.key === 'Enter') {
               sendChat()
             }
           }}
@@ -48,7 +50,6 @@ Chat.propTypes = {
   onChangeMsg: PropTypes.func,
   sendChat: PropTypes.func,
   nickname: PropTypes.string.isRequired,
-  offset: PropTypes.number.isRequired,
 }
 
 Chat.defaultProps = {
@@ -64,8 +65,6 @@ const Container = styled.div`
   flex-wrap: wrap;
 
   width: 100%;
-  max-width: 30%;
-  min-width: 20rem;
   height: 100%;
 
   border-radius: 0.5rem;

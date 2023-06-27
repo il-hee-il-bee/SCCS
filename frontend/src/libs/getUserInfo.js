@@ -21,7 +21,7 @@ export default async function getUserInfo(id) {
     })
     .catch((err) => {
       // 로컬 페이제 테스트를 위해 임시로 사용자 id와 nickname으로 저장
-      const temUserInfo = {
+      const tempUserInfo = {
         id: id,
         name: id,
         nickname: id,
@@ -30,9 +30,8 @@ export default async function getUserInfo(id) {
         joinDate: '2023-01-01',
         profileImage: null,
       }
-      store.dispatch(setUserInfo(temUserInfo))
-      return temUserInfo
+      store.dispatch(setUserInfo(tempUserInfo))
+      return tempUserInfo
     })
-  console.log('getUserInfo', user)
   return user
 }

@@ -1,39 +1,23 @@
-import React, { useMemo } from 'react'
+import { React, useEffect } from 'react'
 import styled from 'styled-components'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
+import getScoreIcon from 'libs/getScoreIcon'
 import Button from 'components/common/Button'
 import ProfileImg from 'components/common/ProfileImg'
 import ProfileInput from 'components/mypage/ProfileInput'
-import {
-  FaChessQueen,
-  FaChessRook,
-  FaChessKnight,
-  FaChessBishop,
-  FaChessPawn,
-} from 'react-icons/fa'
-
-const gradeIcons = [
-  <FaChessQueen />,
-  <FaChessRook />,
-  <FaChessKnight />,
-  <FaChessBishop />,
-  <FaChessPawn />,
-]
+import getUserInfo from 'libs/getUserInfo'
 
 export default function Profile() {
+  useEffect(() => {
+    getUserInfo('refreshed')
+  }, [])
+
   // 리덕스 -> 사용자 정보 읽어오기
   const user = useSelector((state) => state.user)
 
   // score을 기반으로 gradeIcons 배열의 인덱스 계산
-  const index = useMemo(() => {
-    console.log(user.score, '유저스코어다!')
-    if (user.score >= 1000000) return 0
-    if (user.score >= 30000) return 1
-    if (user.score >= 3000) return 2
-    if (user.score) return 3
-    else return 4
-  }, [user])
+  const [scoreIcon, grade] = getScoreIcon(user.score)
 
   // 리액트 훅 관련 함수 정의
   const navigate = useNavigate()
@@ -42,17 +26,16 @@ export default function Profile() {
     <Container>
       <h1>Profile</h1>
       <ProfileContainer>
-        <IconWrapper>
-          {gradeIcons[index]}
-          {user.score}점
-        </IconWrapper>
-        <ProfileImg imgUrl={user.profileImage} />
+        <ProfileImg src={user.profileImage} />
         <p className="semi-bold">가입일: {user.joinDate}</p>
       </ProfileContainer>
-
+      <IconWrapper>
+        {scoreIcon}
+        {grade} {user.score}점
+      </IconWrapper>
       <InputContainer>
         <ProfileInput type="id" value={user.id} disabled={true}></ProfileInput>
-        <Flexbox>
+        <FlexBox>
           <ProfileInput
             type="name"
             value={user.name}
@@ -63,14 +46,13 @@ export default function Profile() {
             value={user.nickname}
             disabled={true}
           ></ProfileInput>
-        </Flexbox>
+        </FlexBox>
         <ProfileInput
           type="email"
           value={user.email}
           disabled={true}
         ></ProfileInput>
       </InputContainer>
-
       <ButtonWrapper>
         <Button
           value="Edit"
@@ -111,7 +93,7 @@ const InputContainer = styled.div`
   margin: 2rem 0rem;
 `
 
-const Flexbox = styled.div`
+const FlexBox = styled.div`
   display: flex;
   justify-content: space-between;
   gap: 20px;
@@ -121,9 +103,6 @@ const ButtonWrapper = styled.div`
   justify-content: end;
 `
 const IconWrapper = styled.div`
-  color: ${({ theme }) => theme.secondaryColor};
-  font-size: 30px;
-`
-const IconWrapper2 = styled.div`
+  font-size: 2rem;
   color: ${({ theme }) => theme.secondaryColor};
 `

@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useWindowHeight } from 'hooks/useWindowHeight'
 import api from 'constants/api'
-import { languagePk } from 'constants/pk'
+import { languagePk, languagePkInitialCode } from 'constants/pk'
 import axios from 'libs/axios'
 import Code from 'components/study/Code'
 import Loading from 'components/common/Loading'
@@ -15,20 +15,21 @@ import ButtonDropdown from 'components/common/ButtonDropdown'
 
 export default function SolvePage() {
   const navigate = useNavigate()
+  const windowHeight = useWindowHeight() // window의 innerHeight를 반환하는 커스텀 훅
 
   const memberId = useSelector((state) => state.user.id)
   const { problemId } = useParams()
 
-  // window의 innerHeight를 반환하는 커스텀 훅
-  const windowHeight = useWindowHeight()
-
   const [problemImageUrl, setProblemImageUrl] = useState(null)
   const [submissionList, setSubmissionList] = useState([])
-  const [code, setCode] = useState('')
   const [languageId, setLanguageId] = useState(1)
+  const [code, setCode] = useState(languagePkInitialCode[languageId])
   const [testResult, setTestResult] = useState(null)
 
-  // 문제 번호 클릭 시, 제출내역 저장
+  // 테스트, 제출 버튼 클릭 관련 state (true는 submit / false는 test)
+  const [isSubmit, setIsSubmit] = useState(false)
+
+  // 문제 번호에 해당하는 상세페이지 불러오기
   useEffect(() => {
     const [url, method] = api('solveProblem', { memberId, problemId })
     const config = { url, method }
@@ -46,7 +47,14 @@ export default function SolvePage() {
 
   // 코드 제출
   const submitCode = (type) => {
-    const apiKey = type === 'submit' ? 'submitCode' : 'testCode'
+    let apiKey = ''
+    if (type === 'submit') {
+      apiKey = 'submitCode'
+      setIsSubmit(true)
+    } else {
+      apiKey = 'testCode'
+      setIsSubmit(false)
+    }
     const codeString = code
     const formData = new FormData()
     formData.append('formFile', new Blob([codeString], { type: 'text/plain' }))
@@ -75,20 +83,21 @@ export default function SolvePage() {
 
   // 선택한 제출내역의 코드를 string으로 fetch
   const fetchData = async (idx) => {
-    fetch(submissionList[idx[0]].submissionFile)
+    const submission = submissionList[idx]
+    fetch(submission.submissionFile)
       .then((res) => {
         return res.text()
       })
       .then((code) => {
-        // console.log('code', code)
         setCode(code)
+        setLanguageId(submission.submissionLID)
       })
   }
 
   // 언어선택 드롭다운을 통해 languageId 바꾸기
-  const changeLanguageId = (idx) => {
-    console.log(idx[0])
-    setLanguageId(idx[0])
+  const changeLanguageId = (pk) => {
+    setLanguageId(pk)
+    setCode(languagePkInitialCode[pk])
   }
 
   return (
@@ -120,14 +129,15 @@ export default function SolvePage() {
                   size="small"
                   type="primary"
                   options={languagePk}
-                  onClick={(e) => changeLanguageId(e.target.id.split('-'))}
+                  onClick={(e) => changeLanguageId(e.target.id.split('-')[0])}
                 />
                 <ButtonDropdown
                   title="코드 선택"
                   size="small"
                   type="primary"
                   options={codesObject}
-                  onClick={(e) => fetchData(e.target.id.split('-'))}
+                  onClick={(e) => fetchData(e.target.id.split('-')[0])}
+                  isLeft={false}
                 />
               </FlexBox>
               <Code value={code} setValue={setCode} languageId={languageId} />
@@ -157,6 +167,7 @@ export default function SolvePage() {
                   submit={() => {
                     submitCode('submit')
                   }}
+                  isSubmit={isSubmit}
                 />
               </Resizable>
             </FlexColumn>

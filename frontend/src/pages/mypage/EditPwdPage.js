@@ -44,9 +44,7 @@ export default function PasswordEdit() {
       .then((res) => {
         navigate('/mypage/profile')
       })
-      .catch((err) => {
-        alert('서버와의 통신이 원활하지 않습니다.')
-      })
+      .catch((err) => {})
   }
 
   return (
@@ -65,7 +63,7 @@ export default function PasswordEdit() {
       </TapWrapper>
 
       <ProfileContainer>
-        <ProfileImg imgUrl={user.profileImage} />
+        <ProfileImg src={user.profileImage} />
         <p className="semi-bold">가입일: {user.joinDate}</p>
       </ProfileContainer>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useParams, useNavigate, Outlet, useLocation } from 'react-router-dom'
 import stompjs from 'stompjs'
@@ -8,6 +8,13 @@ import styled from 'styled-components'
 import * as faceapi from 'face-api.js'
 import { OpenVidu } from 'openvidu-browser'
 import { toggleTheme } from 'redux/themeSlice'
+import {
+  setReduxRoomInfo,
+  setReduxMainStreamManager,
+  setReduxMembers,
+  setReduxFinishedObject,
+  deleteRoom,
+} from 'redux/roomSlice'
 import api from 'constants/api'
 import axios from 'libs/axios'
 import ToolBar from 'components/study/ToolBar'
@@ -18,9 +25,12 @@ import presentImg from 'assets/img/webRTC_present_image.png'
 
 //Openvidu AppServer
 // const APPLICATION_SERVER_URL = 'http://localhost:5000/'
-const APPLICATION_SERVER_URL = 'https://i8a301.p.ssafy.io/'
+const APPLICATION_SERVER_URL = 'https://sccs.kr/'
 
 export default function StudyRoom() {
+  // 리덕스 -> 기존 방 정보 읽어오기
+  const room = useSelector((state) => state.room)
+
   // 리액트 훅 관련 함수 정의
   const navigate = useNavigate()
   const dispatch = useDispatch()
@@ -32,9 +42,15 @@ export default function StudyRoom() {
 
   // 기본정보
   const { studyroomId } = useParams()
-  const [roomInfo, setRoomInfo] = useState(null)
-  const [members, setMembers] = useState([])
-  const [problems, setProblems] = useState(null)
+  const [roomInfo, setRoomInfo] = useState(room)
+  const [problems, setProblems] = useState(room.problems)
+  const [memberObject, setMemberObject] = useState(
+    room.members ? room.members : {},
+  )
+
+  const memberList = useMemo(() => {
+    return Object.keys(memberObject)
+  }, [memberObject])
 
   // 웹소켓 useState
   const [stomp, setStomp] = useState(null)
@@ -44,32 +60,60 @@ export default function StudyRoom() {
   const [message, setMessage] = useState('')
   const [chatList, setChatList] = useState([])
 
+  // 레디 상태를 비디오에 표시하기 위한 리스트
+  const [readyNicknameObject, setReadyNicknameObject] = useState({})
+
+  const readyNicknameList = useMemo(() => {
+    return Object.keys(readyNicknameObject)
+  }, [readyNicknameObject])
+
   // Opnvidu useState
   const [session, setSession] = useState(undefined)
+  const [mainStreamManager, setMainStreamManager] = useState(undefined)
   const [publisher, setPublisher] = useState(undefined)
   const [subscribers, setSubscribers] = useState([])
   const [currentVideoDevice, setCurrentVideoDevice] = useState(undefined)
 
-  const [isMicOn, setIsMicOn] = useState(true)
+  const [isMicOn, setIsMicOn] = useState(false)
   const [isVideos, setIsVideos] = useState(true)
   const [isCameraOn, setIsCameraOn] = useState(true)
+  const [isScreenShare, setIsScreenShare] = useState(room.isScreenShare)
 
+  const checkHostExit = useRef(null)
   const OV = useRef(null) // OV객체를 저장
   const faceInterval = useRef(null) // face-api 동작 시, setInterval 객체를 저장
 
+  // finished를 막힘없이 받기 위해서
+  const [finishedObject, setFinishedObject] = useState(
+    room.finishedObject ? room.finishedObject : {},
+  )
+
+  const finishedList = useMemo(() => {
+    return Object.keys(finishedObject)
+  }, [finishedObject])
+
   // 스터디룸 정보 axios 요청
   useEffect(() => {
-    const [url, method] = api('enterRoom', { studyroomId })
-    const config = { url, method }
-    axios
-      .request(config)
-      .then((res) => {
-        const roomInfo = res.data
-        setRoomInfo(roomInfo)
-      })
-      .catch((err) => {
-        alert('대기방 정보를 불러오지 못했습니다.')
-      })
+    if (JSON.stringify(roomInfo) === '{}') {
+      const [url, method] = api('enterRoom', { studyroomId })
+      const config = { url, method }
+      axios
+        .request(config)
+        .then((res) => {
+          const roomInfo = res.data
+          setRoomInfo(roomInfo)
+          dispatch(setReduxRoomInfo(roomInfo))
+        })
+        .catch((err) => {
+          if (err.response.status === 400) {
+            alert(err.response.status.data.message) // 이미 문제를 풀고 있는 방입니다. 대기방이 꽉 찼습니다.
+          }
+          if (err.response.status === 404) {
+            alert('방 정보를 불러올 수 없습니다.')
+          }
+          exit()
+        })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -78,7 +122,7 @@ export default function StudyRoom() {
     joinSession()
     connect()
     return () => {
-      exit()
+      disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -87,7 +131,7 @@ export default function StudyRoom() {
   window.addEventListener('beforeunload', (event) => {
     // 명세에 따라 preventDefault는 호출해야하며, 기본 동작을 방지합니다.
     event.preventDefault()
-    exit()
+    disconnect()
   })
 
   // 브라우저창 닫을 시
@@ -97,25 +141,78 @@ export default function StudyRoom() {
     exit()
   })
 
-  // 뒤로가기 시
-  window.onpopstate = (event) => {
-    exit()
-  }
+  // 뒤로가기 막기
+  useEffect(() => {
+    const handlePopstate = (event) => {
+      event.preventDefault()
+    }
 
-  // 나가는 함수. 소켓통신과 webRTC 연결을 해제하고 메인페이지로 이동
-  const exit = () => {
+    window.history.pushState(null, null, location.href)
+    window.addEventListener('popstate', handlePopstate)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopstate)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // webSocket과 openvidu session을 끊는 함수
+  const disconnect = () => {
+    // 1. 웹소켓 통신 끊기
     if (stomp) {
-      sendExit()
+      sendDisconnect()
       stomp.disconnect()
     }
+    // 2. openvidu 세션 끊기
     if (session) {
       session.disconnect()
     }
+    // 3. face-interval 비디오 초기화
+    const video = document.getElementById('publisher-video')
+    if (video) {
+      video.srcObject = undefined
+    }
+    if (faceInterval.current) {
+      clearInterval(faceInterval.current)
+      faceInterval.current = null
+    }
+    // 4. 관련 변수 모두 초기화
     setConnected(false)
     OV.current = null
     setSession(undefined)
     setSubscribers([])
     setPublisher(undefined)
+  }
+
+  // webSocket과 openvidu session을 끊고 exit
+  const exit = () => {
+    // 1. 웹소켓 통신 끊기
+    if (stomp) {
+      sendExit()
+      stomp.disconnect()
+    }
+    // 2. openvidu 세션 끊기
+    if (session) {
+      session.disconnect()
+    }
+    // 3. face-interval 비디오 초기화
+    const video = document.getElementById('publisher-video')
+    if (video) {
+      video.srcObject = undefined
+    }
+    if (faceInterval.current) {
+      clearInterval(faceInterval.current)
+      faceInterval.current = null
+    }
+    // 4. 관련 변수 모두 초기화
+    setConnected(false)
+    OV.current = null
+    setSession(undefined)
+    setSubscribers([])
+    setPublisher(undefined)
+    dispatch(deleteRoom())
+    setMainStreamManager(undefined)
+    dispatch(setReduxMainStreamManager(undefined))
     navigate('/')
   }
 
@@ -137,19 +234,37 @@ export default function StudyRoom() {
           return
         }
         if (content.status === 'exit') {
+          checkHostExit.current(content.id)
           setRoomInfo((roomInfo) => {
             const newRoomInfo = { ...roomInfo }
             newRoomInfo.personnel = content.personnel
             return newRoomInfo
           })
+          if (!memberObject) return
+          // 테스트가 시작되고 인원이 나갔을 때, members 업데이트
+          setMemberObject((memberObject) => {
+            const newMemberObject = { ...memberObject }
+            delete newMemberObject[content.id]
+            dispatch(setReduxMembers(newMemberObject))
+            return newMemberObject
+          })
           return
         }
         if (content.status === 'chat') {
-          const { nickname, profileImage, message } = content
+          const { nickname, score, profileImage, message } = content
           setChatList((chatList) => [
-            { nickname, profileImage, message },
+            { nickname, score, profileImage, message },
             ...chatList,
           ])
+          return
+        }
+        if (content.status === 'study') {
+          setFinishedObject((finishedObject) => {
+            const newFinishedObject = { ...finishedObject }
+            newFinishedObject[content.nickname] = true
+            dispatch(setReduxFinishedObject(newFinishedObject))
+            return newFinishedObject
+          })
           return
         }
       })
@@ -164,6 +279,20 @@ export default function StudyRoom() {
         }),
       )
     })
+  }
+
+  // 웹 소켓 send: 방 연결이 끊겼을 때
+  const sendDisconnect = () => {
+    stomp.send(
+      '/pub/studyroom',
+      {},
+      JSON.stringify({
+        status: 'disconnect',
+        studyroomId: studyroomId,
+        id: user.id,
+        nickname: user.nickname,
+      }),
+    )
   }
 
   // 웹 소켓 send: 방 나가기
@@ -182,6 +311,7 @@ export default function StudyRoom() {
 
   // 웹 소켓 send: 채팅 전송
   const sendChat = () => {
+    if (!message.trim()) return
     stomp.send(
       '/pub/studyroom',
       {},
@@ -190,11 +320,19 @@ export default function StudyRoom() {
         studyroomId: studyroomId,
         id: user.id,
         nickname: user.nickname,
+        score: user.score,
         profileImage: user.profileImage,
         message: message,
       }),
     )
     setMessage('')
+  }
+
+  checkHostExit.current = (id) => {
+    if (id === roomInfo.hostId) {
+      alert('방장이 방을 나갔습니다ㅜㅜ')
+      exit()
+    }
   }
 
   // openvidu subscriber삭제하는 함수
@@ -263,12 +401,12 @@ export default function StudyRoom() {
           const publisher = await OV.current.initPublisherAsync(undefined, {
             audioSource: undefined, // The source of audio. If undefined default microphone
             videoSource: undefined, // The source of video. If undefined default webcam
-            publishAudio: true, // Whether you want to start publishing with your audio unmuted or not
+            publishAudio: false, // Whether you want to start publishing with your audio unmuted or not
             publishVideo: true, // Whether you want to start publishing with your video enabled or not
             resolution: '640x480', // The resolution of your video
             frameRate: 30, // The frame rate of your video
             insertMode: 'APPEND', // How the video is inserted in the target element 'video-container'
-            mirror: false, // Whether to mirror your local video or not
+            mirror: true, // Whether to mirror your local video or not
           })
           // --- 6) Publish your stream ---
 
@@ -314,16 +452,16 @@ export default function StudyRoom() {
         clearInterval(faceInterval.current)
         faceInterval.current = null
       }
-      // 1-2. default video device로 stream 생성
+      // 1-2. default video device로 stream 생성ㅎ
       const devices = await OV.current.getDevices()
       const videoDevices = devices.filter(
         (device) => device.kind === 'videoinput',
       )
       const newPublisher = OV.current.initPublisher(undefined, {
         videoSource: videoDevices[0].deviceId,
-        publishAudio: true,
+        publishAudio: isMicOn,
         publishVideo: true,
-        mirror: false,
+        mirror: true,
       })
       await session.unpublish(publisher)
       await session.publish(newPublisher)
@@ -460,8 +598,9 @@ export default function StudyRoom() {
               roomInfo,
               stomp,
               connected,
-              members,
-              setMembers,
+              memberObject,
+              setMemberObject,
+              memberList,
               problems,
               setProblems,
               message,
@@ -475,13 +614,29 @@ export default function StudyRoom() {
               subscribers,
               isVideos,
               setIsVideos,
+              isScreenShare,
+              setIsScreenShare,
+              isMicOn,
               setIsMicOn,
+              mainStreamManager,
+              setMainStreamManager,
+              readyNicknameObject,
+              setReadyNicknameObject,
+              finishedObject,
+              setFinishedObject,
+              finishedList,
             }}
           />
 
-          {isVideos && location.pathname.slice(-4) !== 'test' && (
-            <VideoList publisher={publisher} subscribers={subscribers} />
-          )}
+          {isVideos &&
+            location.pathname.slice(-4) !== 'test' &&
+            !isScreenShare && (
+              <VideoList
+                publisher={publisher}
+                subscribers={subscribers}
+                readyList={readyNicknameList}
+              />
+            )}
         </>
       ) : (
         <Loading height="90vh" />

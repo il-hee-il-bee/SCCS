@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import styled from 'styled-components'
 import axios from 'libs/axios'
 import checkLogin from 'libs/checkLogin'
 import api from 'constants/api'
-import { algorithmPk, languagePk } from 'constants/pk'
+import { algorithmPkNoRandom, languagePk } from 'constants/pk'
 import useInterval from 'hooks/useInterval'
 import Room from 'components/main/Room'
 import Modal from 'components/common/Modal'
@@ -13,10 +13,15 @@ import CheckDropdown from 'components/common/CheckDropdown'
 import RadioDropdown from 'components/common/RadioDropdown'
 import CreateRoomMdContent from 'components/main/CreateRoomMdContent'
 
+import IconButton from 'components/common/IconButton'
+import { FaAngleLeft, FaAngleRight } from 'react-icons/fa'
+
 const searchOptions = {
   title: '방 이름',
   id: '방 번호',
 }
+
+const ROOM_PER_PAGE = 12 // 페이지 당 방의 갯수
 
 export default function MainRooms() {
   const isLogin = checkLogin()
@@ -27,6 +32,9 @@ export default function MainRooms() {
   const [selectedOption, setSelectedOption] = useState('title')
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
+
+  // 방 갯수에 따른 Pagination
+  const [currentPage, setCurrentPage] = useState(0)
 
   // 컴포넌트 생성 시 방 검색 api 요청
   useEffect(() => {
@@ -44,7 +52,27 @@ export default function MainRooms() {
       })
   }, [])
 
-  // 언어 선택에 따른 languageIds 배열 변환 함수
+  // 방 갯수에 따른 Page 갯수 설정 함수
+  const pages = useMemo(() => {
+    if (!rooms) return
+    if (rooms.length % ROOM_PER_PAGE) {
+      return parseInt(rooms.length / ROOM_PER_PAGE)
+    } else {
+      return parseInt(rooms.length / ROOM_PER_PAGE) - 1
+    }
+  }, [rooms])
+
+  // 왼쪽, 오른쪽 버튼 클릭 시 방 Pagination 이동
+  const previousPagination = () => {
+    if (currentPage === 0) return
+    setCurrentPage(currentPage - 1)
+  }
+  const nextPagination = () => {
+    if (currentPage >= pages) return
+    setCurrentPage(currentPage + 1)
+  }
+
+  // 언어 선택에 따른 languageIds 배열 변환 함수 2
   const changeLanguageIds = (e) => {
     const languageId = parseInt(e.target.id.split('-')[0])
     if (e.target.checked) {
@@ -62,6 +90,11 @@ export default function MainRooms() {
       return
     }
     setAlgoIds(algoIds.filter((id) => id !== algoId))
+  }
+
+  // 검색 옵션 변경 함수
+  const changeOption = (e) => {
+    setSelectedOption(e.target.id.split('-')[0])
   }
 
   // 방생성 버튼 클릭 시
@@ -130,16 +163,15 @@ export default function MainRooms() {
             />
             <CheckDropdown
               title="알고리즘 선택"
-              options={algorithmPk}
+              options={algorithmPkNoRandom}
               onChange={changeAlgoIds}
             />
             <InputBox>
               <RadioDropdown
-                selectedId={selectedOption}
-                name="검색 옵션"
+                name="Search-Option"
                 options={searchOptions}
-                selectedKey="title"
-                onChange={(e) => setSelectedOption(e.target.id)}
+                selectedKey={selectedOption}
+                onChange={changeOption}
               />
               <StyledInput
                 type={selectedOption === 'title' ? 'text' : 'number'}
@@ -156,20 +188,39 @@ export default function MainRooms() {
           ></Button>
         </FlexBox>
         {rooms ? (
-          <GridBox>
-            {rooms.map((room) => (
-              <Room
-                key={room.id}
-                id={room.id}
-                title={room.title}
-                isSolving={room.isSolving}
-                isPrivate={room.isPrivate}
-                algoIds={room.algoIds}
-                languageIds={room.languageIds}
-                personnel={room.personnel}
-              />
-            ))}
-          </GridBox>
+          <FlexBox2>
+            <IconButton
+              size="large"
+              type="gray"
+              icon={<FaAngleLeft />}
+              onClick={previousPagination}
+            ></IconButton>
+            <GridBox>
+              {rooms
+                .slice(
+                  currentPage * ROOM_PER_PAGE,
+                  currentPage * ROOM_PER_PAGE + ROOM_PER_PAGE,
+                )
+                .map((room) => (
+                  <Room
+                    key={room.id}
+                    id={room.id}
+                    title={room.title}
+                    isSolving={room.isSolving}
+                    isPrivate={room.isPrivate}
+                    algoIds={room.algoIds}
+                    languageIds={room.languageIds}
+                    personnel={room.personnel}
+                  />
+                ))}
+            </GridBox>
+            <IconButton
+              size="large"
+              type="gray"
+              icon={<FaAngleRight />}
+              onClick={nextPagination}
+            ></IconButton>
+          </FlexBox2>
         ) : (
           <Loading height="30rem" />
         )}
@@ -201,6 +252,15 @@ const FlexBox = styled.div`
     flex-direction: row;
   }
 `
+const FlexBox2 = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  width: 100%;
+
+  margin: 2rem 0rem;
+`
 
 const SearchContainer = styled.div`
   display: flex;
@@ -229,18 +289,18 @@ const StyledInput = styled.input`
 `
 const GridBox = styled.div`
   display: grid;
-  gap: 1rem 3rem;
+  gap: 2rem 3rem;
+  grid-template-columns: repeat(2, 1fr);
   overflow-y: auto;
 
-  height: 32rem;
-
   margin: 2rem 0rem 0rem;
-  padding: 0.2rem 1rem 0rem;
 
-  grid-template-columns: repeat(2, 1fr);
-
+  padding: 1rem 1rem;
   @media screen and (min-width: 1024px) {
-    gap: 1rem 1rem;
+    gap: 1.5rem 1rem;
+  }
+  @media screen and (min-width: 1300px) {
+    gap: 1.5rem 1.5rem;
     grid-template-columns: repeat(3, 1fr);
   }
 `

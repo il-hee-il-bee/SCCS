@@ -1,6 +1,5 @@
 package com.sccs.api.member.controller;
 
-import com.amazonaws.util.IOUtils;
 import com.sccs.api.aws.dto.FileDto;
 import com.sccs.api.aws.service.AwsS3Service;
 import com.sccs.api.member.dto.MemberDto;
@@ -14,30 +13,22 @@ import com.sccs.api.member.util.RedisService;
 import io.jsonwebtoken.Claims;
 import io.swagger.annotations.*;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.Files;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import javax.mail.MessagingException;
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.disk.DiskFileItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -49,7 +40,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
 
 @RestController
 @RequestMapping("/api")
@@ -64,7 +54,6 @@ public class MemberController {
   private static final int HOUR = MINUTE * 60; // 1시간
   private static final int DAY = HOUR * 24; // 24시간
   private static final int WEEK = DAY * 7; // 1주일
-  private static final String HEADER_AUTH = "authorization";
   private static final String MESSAGE = "message";
 
   private final MemberService memberService;
@@ -84,13 +73,6 @@ public class MemberController {
           @ApiResponse(code = 200, message = "회원 가입 성공"),
           @ApiResponse(code = 401, message = "회원 가입 실패")
   })
-//  @ApiImplicitParams({
-//          @ApiImplicitParam(name = "id", value = "아이디", required = true),
-//          @ApiImplicitParam(name = "name", value = "이름", required = true),
-//          @ApiImplicitParam(name = "nickname", value = "닉네임", required = true),
-//          @ApiImplicitParam(name = "email", value = "이메일", required = true),
-//          @ApiImplicitParam(name = "password", value = "비밀번호", required = true),
-//  })
   public ResponseEntity<?> signUp(@RequestBody MemberDto memberDto)
       throws NoSuchAlgorithmException {
     Map<String, String> resultMap = new HashMap<>();
@@ -128,24 +110,18 @@ public class MemberController {
       String salt = memberDto.getSalt(); // DTO에 저장된 salt 값 불러오기
       String hex = encryptService.encryptPassword(password, salt); // 암호화 후 비밀번호
 
-//      logger.debug("[logIn]로그인 시도 비번 : {}", hex);
-//      logger.debug("[logIn]기존   비밀번호 : {}", memberDto.getPassword());
-
       if (hex.equals(memberDto.getPassword())) { // DB에 저장되어있는 비밀번호와 새롭게 들어온 비밀번호와 같은지 비교
         logger.debug("[logIn]로그인 성공");
 
         String accessToken = jwtService.createToken(paramMap.get("id"), "accessToken",
-                (HOUR * 9));
-        long exp = System.currentTimeMillis() + (HOUR * 9);
+                (MINUTE * 30));
+        long exp = System.currentTimeMillis() + (HOUR * 8);
         String refreshToken = jwtService.createToken(paramMap.get("id"), "refreshToken",
-                (HOUR * 10));
-
-//        resultmap.put("accessToken", accessToken);
-//        resultmap.put("refreshToken", refreshToken);
+                (HOUR * 8));
 
         // 쿠키 생성
-        Cookie accessTokenCookie = cookieService.createCookie("accessToken", accessToken);
-        Cookie refreshTokenCookie = cookieService.createCookie("refreshToken", refreshToken);
+        ResponseCookie accessTokenCookie = cookieService.createCookie("accessToken", accessToken);
+        ResponseCookie refreshTokenCookie = cookieService.createCookie("refreshToken", refreshToken);
 
         // Redis에 리프레쉬 토큰 저장
         try {
@@ -156,11 +132,12 @@ public class MemberController {
           logger.error("[login]레디스 값 저장 실패, {}", e.getMessage());
           return new ResponseEntity<>(resultmap, HttpStatus.BAD_GATEWAY);
         }
-        response.addCookie(accessTokenCookie);
-        response.addCookie(refreshTokenCookie);
 
-//        Claims claims = jwtService.getToken(accessToken);
-//        String exp = (String) jwtService.getToken(accessToken).get("expiration");
+
+        response.setHeader("Set-Cookie", accessTokenCookie.toString());
+        response.setHeader("Set-Cookie", refreshTokenCookie.toString());
+//        response.addCookie(accessTokenCookie);
+//        response.addCookie(refreshTokenCookie);
 
         logger.debug("[login]로그인 성공");
         resultmap.put(MESSAGE, "성공");
@@ -183,18 +160,13 @@ public class MemberController {
    * Auth
    **/
   @GetMapping("/member")
-  public ResponseEntity<?> memberInfo(HttpServletRequest request) { // @CookieValue String accessToken
+  public ResponseEntity<?> memberInfo(@CookieValue(value = "accessToken", defaultValue = "") String accessToken) {
     Map<String, Object> resultMap = new HashMap<>();
 
-
-    logger.info("회원정보 조회 컨트롤러 입장 !!");
-    Cookie[] cookies = request.getCookies();
-    logger.debug("쿠키에서 값 가져오기 1!!! : {}", cookies[0].getName());
-    String accessToken = cookies[0].getValue();
-
-    // 헤더 방식
-    // final String token = request.getHeader(HEADER_AUTH).substring("Bearer ".length()); // 헤더에서 토큰 파싱
-    // String id = (String) jwtService.getToken(token).get("id"); // 회원 아이디를 accessToken에서 파싱
+    if (accessToken.isEmpty()) {
+      resultMap.put(MESSAGE, "쿠키 없음");
+      return new ResponseEntity<>(resultMap, HttpStatus.BAD_REQUEST);
+    }
 
     String id = (String) jwtService.getToken(accessToken).get("id");
     MemberDto memberDto = memberService.memberInfo(id);
@@ -350,7 +322,7 @@ public class MemberController {
     String email = paramMap.get("email"); // 받는 사람 주소
     String id = paramMap.get("id"); // 회원 아이디
 
-    HashMap<String, String> resultMap = new HashMap();
+    HashMap<String, String> resultMap = new HashMap<>();
 
     MemberDto memberDto = memberService.memberInfo(id);
 
@@ -381,9 +353,15 @@ public class MemberController {
    * access-token 재발급
    **/
   @GetMapping("/member/refreshToken")
-  public ResponseEntity<?> refreshToken(@CookieValue String refreshToken, HttpServletResponse response) {
+  public ResponseEntity<?> refreshToken(@CookieValue(value = "refreshToken", defaultValue = "") String refreshToken, HttpServletResponse response) {
     HashMap<String, Object> resultMap = new HashMap<>();
     HttpStatus status = HttpStatus.OK;
+
+    if (refreshToken.isEmpty()) {
+      logger.debug("[deleteRefreshToken]쿠키값 없음");
+      resultMap.put(MESSAGE, "쿠키값 없음");
+      return new ResponseEntity<>(resultMap, HttpStatus.BAD_REQUEST); // 400
+    }
 
     if (jwtService.checkToken(refreshToken)) {
       Claims claims = jwtService.getToken(refreshToken);
@@ -391,18 +369,20 @@ public class MemberController {
       logger.debug("[refreshToken]토큰 인증 성공");
       if (id.equals(redisService.getRefreshTokenWithRedis(refreshToken))) {
         logger.debug("[refreshToken]레디스에서 토큰 조회 성공");
-        String newAccessToken = jwtService.createToken(id, "accessToken", 9 * HOUR);
+        String newAccessToken = jwtService.createToken(id, "accessToken", MINUTE * 30);
 
-        long exp = System.currentTimeMillis() + (HOUR * 9);
+//        long exp = System.currentTimeMillis() + (MINUTE * 30);
 
         // 토큰 생성
-        Cookie accessTokenCookie = cookieService.createCookie("accessToken", newAccessToken);
+        //Cookie accessTokenCookie = cookieService.createCookie("accessToken", newAccessToken);
+        ResponseCookie accessTokenCookie = cookieService.createCookie("accessToken", newAccessToken);
 
         // 엑세스 토큰 세팅
-        response.addCookie(accessTokenCookie);
+        //response.addCookie(accessTokenCookie);
+        response.setHeader("Set-Cookie", accessTokenCookie.toString());
 
         resultMap.put(MESSAGE, SUCCESS);
-        resultMap.put("expiration", exp);
+//        resultMap.put("expiration", exp);
       }
     } else {
       logger.debug("리프레쉬 토큰 사용 불가");
@@ -413,8 +393,14 @@ public class MemberController {
   }
 
   @DeleteMapping("/member")
-  public ResponseEntity<?> delete(@CookieValue String accessToken) {
+  public ResponseEntity<?> delete(@CookieValue(value = "accessToken", defaultValue = "") String accessToken) {
     HashMap<String, String> resultMap = new HashMap<>();
+
+    if (accessToken.isEmpty()) {
+      logger.debug("[deleteRefreshToken]쿠키값 없음");
+      resultMap.put(MESSAGE, "쿠키값 없음");
+      return new ResponseEntity<>(resultMap, HttpStatus.BAD_REQUEST); // 400
+    }
 
     Claims claims = jwtService.getToken(accessToken);
     String id = (String) claims.get("id");
@@ -435,8 +421,15 @@ public class MemberController {
    * 레디스 특정 키 값 삭제
    */
   @DeleteMapping ("/member/refreshToken")
-  public ResponseEntity<?> deleteRefreshToken(@CookieValue String refreshToken) {
+  public ResponseEntity<?> deleteRefreshToken(@CookieValue(value = "refreshToken", defaultValue = "") String refreshToken) {
     HashMap<String, String> resultMap = new HashMap<>();
+
+    if (refreshToken.isEmpty()) {
+      logger.debug("[deleteRefreshToken]쿠키값 없음");
+      resultMap.put(MESSAGE, "쿠키값 없음");
+      return new ResponseEntity<>(resultMap, HttpStatus.BAD_REQUEST); // 400
+    }
+
     if (Objects.equals(redisService.deleteKey(refreshToken), SUCCESS)) {
       logger.debug("deleteRefreshToken레디스 값 삭제 성공");
       resultMap.put(MESSAGE, "성공");
@@ -460,10 +453,10 @@ public class MemberController {
   /**
    * 레디스 전체 키-밸류 삭제
    **/
-  @DeleteMapping("/redisKeys")
-  public ResponseEntity<?> deleteKeys() {
-    redisService.deleteAllKeys();
-    return new ResponseEntity<>("모든 키 삭제 성공", HttpStatus.OK);
-  }
+//  @DeleteMapping("/redisKeys")
+//  public ResponseEntity<?> deleteKeys() {
+//    redisService.deleteAllKeys();
+//    return new ResponseEntity<>("모든 키 삭제 성공", HttpStatus.OK);
+//  }
 
 }

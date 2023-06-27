@@ -43,9 +43,7 @@ export default function Room({
   const languages = useMemo(() => {
     const tempLanguages = []
     languageIds.forEach((pk) => {
-      tempLanguages.push(
-        <IconButton key={pk} disabled={true} icon={languageIconPk[pk]} />,
-      )
+      tempLanguages.push(languageIconPk[pk])
     })
     return tempLanguages
   }, [languageIds])
@@ -68,13 +66,20 @@ export default function Room({
       return
     }
     // 진행방 일 경우
-    if (isSolving) return
+    if (isSolving) {
+      alert('이미 문제를 풀고 있는 방입니다')
+      return
+    }
     // 비밀방 일 경우 모달창 띄우기
     if (isPrivate) {
       setShowModal(true)
       return
     }
     // 비밀방이 아닐 경우 바로 이동
+    if (personnel >= 6) {
+      alert('만석입니다')
+      return
+    }
     navigate(`/room/${id}/waiting`)
   }
 
@@ -105,7 +110,9 @@ export default function Room({
         </Flexbox>
 
         <Flexbox>
-          {languages}
+          <IconWrapper isSolving={isSolving} isHover={isHover}>
+            {languages}
+          </IconWrapper>
           <OutlineBox isSolving={isSolving} isHover={isHover} flex={1}>
             {isPrivate && (
               <IconButton
@@ -207,4 +214,13 @@ const OutlineBox = styled.div`
   background-color: ${({ theme }) => theme.whiteColor};
 
   white-space: nowrap;
+`
+
+const IconWrapper = styled.div`
+  color: ${({ isSolving, isHover, theme }) =>
+    isHover
+      ? theme.whiteColor
+      : isSolving
+      ? theme.deepTertiaryColor
+      : theme.deepSecondaryColor};
 `

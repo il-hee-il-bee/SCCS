@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import styled from 'styled-components'
-import { Resizable } from 're-resizable'
+import { useSelector, useDispatch } from 'react-redux'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { useWindowHeight } from 'hooks/useWindowHeight'
+import { setReduxProblems } from 'redux/roomSlice'
+import { setReduxFinished } from 'redux/roomSlice'
 import api from 'constants/api'
+import { languagePkInitialCode } from 'constants/pk'
 import axios from 'libs/axios'
+import Layout from 'layouts/TestPageLayout'
 import Timer from 'components/study/Timer'
 import Button from 'components/common/Button'
 import Loading from 'components/common/Loading'
@@ -13,48 +16,43 @@ import CodeSection from 'components/study/CodeSection'
 import ProblemImage from 'components/common/ProblemImage'
 import ResultSection from 'components/study/ResultSection'
 
-const initialCode = {
-  1: `class Solution:
-  print("sccs")
-`,
-  2: `class Solution{
-  public static void main(String[] args) {
-    System.out.println("sccs");
-  }
-}
-`,
-}
-
 export default function TestPage() {
   const {
     user,
     studyroomId,
     roomInfo,
     stomp,
-    members,
+    memberList,
     problems,
     setProblems,
     setIsMicOn,
+    finishedObject,
+    setFinishedObject,
+    finishedList,
   } = useOutletContext()
+
+  // 리덕스 -> 기존 방 정보 읽어오기
+  const room = useSelector((state) => state.room)
 
   // 리액트 훅 관련 함수 선언
   const navigate = useNavigate()
-  const windowHeight = useWindowHeight() // window의 innerHeight를 반환하는 커스텀 훅
+  const dispatch = useDispatch()
 
   // useState
-  const [subscription, setSubscription] = useState(null)
+  // const [subscription, setSubscription] = useState(null)
 
   const [problemIdx, setProblemIdx] = useState(0) // 현재 선택된 문제의 인덱스
 
   const [languageId, setLanguageId] = useState(roomInfo.languageIds[0])
-  const [code, setCode] = useState(initialCode[languageId]) // langaugaeId 다음에 선언
+  const [code, setCode] = useState(languagePkInitialCode[languageId]) // langaugaeId 다음에 선언
   const [testResult, setTestResult] = useState(null)
 
-  const [finished, setFinished] = useState(false)
-  const [finishedList, setFinishedList] = useState([])
+  const [finished, setFinished] = useState(
+    room.finished ? room.finished : false,
+  )
 
-  const [onSubmitButton, setOnSubmitButoon] = useState(false)
-  const [onTestButton, setOnTestButoon] = useState(false)
+  // 테스트, 제출 버튼 클릭 관련 state (true는 submit / false는 test)
+  const [isSubmit, setIsSubmit] = useState(false)
 
   // 코딩테스트 페이지 입장 시 마이크 뮤트
   useEffect(() => {
@@ -67,13 +65,14 @@ export default function TestPage() {
     const data = {
       id: studyroomId,
       memberId: user.id,
-      memberIds: members,
+      memberIds: memberList,
     }
     const [url, method] = api('codingTest')
     const config = { url, method, data }
     axios(config)
       .then((res) => {
         setProblems(res.data.problems)
+        dispatch(setReduxProblems(res.data.problems))
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,13 +80,13 @@ export default function TestPage() {
 
   // 문제 번호나, 언어 변경 시 초기화
   useEffect(() => {
-    setCode(initialCode[languageId])
+    setCode(languagePkInitialCode[languageId])
     setTestResult(null)
   }, [problemIdx, languageId])
 
   // 모두 시험을 종료하면 테스트 페이지로 이동
   useEffect(() => {
-    if (finishedList.length === members.length) {
+    if (finishedList.length === memberList.length) {
       navigate(`/room/${studyroomId}/study`)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,33 +105,39 @@ export default function TestPage() {
       }),
     )
     setFinished(true)
+    dispatch(setReduxFinished(true))
   }
 
   // 웹 소켓 subscribe
-  useEffect(() => {
-    setSubscription(
-      stomp.subscribe('/sub/studyroom/' + studyroomId, (chatDto) => {
-        const content = JSON.parse(chatDto.body)
-        if (content.status === 'study') {
-          setFinishedList((finishedList) => [...finishedList, chatDto.nickname])
-        }
-      }),
-    )
-    return () => {
-      subscription && subscription.unsubscribe()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // useEffect(() => {
+  //   setSubscription(
+  //     stomp.subscribe('/sub/studyroom/' + studyroomId, (chatDto) => {
+  //       const content = JSON.parse(chatDto.body)
+  //       if (content.status === 'study') {
+  //         setFinishedObject((finishedObject) => {
+  //           const newFinishedObject = { ...finishedObject }
+  //           newFinishedObject[content.nickname] = true
+  //           dispatch(setReduxFinishedObject(newFinishedObject))
+  //           return newFinishedObject
+  //         })
+  //       }
+  //     }),
+  //   )
+  //   return () => {
+  //     subscription && subscription.unsubscribe()
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [])
 
   // 코드 제출 함수. type = 'test' or 'submit'
   const submitCode = (type) => {
-    const apiKey = type === 'submit' ? 'submitCode' : 'testCode'
+    let apiKey = ''
     if (type === 'submit') {
-      setOnTestButoon(false)
-      setOnSubmitButoon(true)
+      apiKey = 'submitCode'
+      setIsSubmit(true)
     } else {
-      setOnSubmitButoon(false)
-      setOnTestButoon(true)
+      apiKey = 'testCode'
+      setIsSubmit(false)
     }
     const codeString = code
     const formData = new FormData()
@@ -154,8 +159,9 @@ export default function TestPage() {
   return (
     <>
       {problems ? (
-        <Container>
-          <FlexBox>
+        <Layout>
+          {/* HeaderPane */}
+          <>
             <ButtonWrapper>
               <RoomInfo
                 id={roomInfo.id}
@@ -183,107 +189,37 @@ export default function TestPage() {
                 navigate(`/room/${studyroomId}/study`)
               }}
             />
-          </FlexBox>
-          <FlexBox2>
-            <ImageWrapper height={windowHeight - 120}>
-              <ProblemImage src={problems[problemIdx].problemImageUrl} />
-            </ImageWrapper>
-            <Resizable
-              defaultSize={{ width: '50%', height: '100%' }}
-              minWidth={'20%'}
-              maxWidth={'80%'}
-              enable={{
-                top: false,
-                right: true,
-                bottom: false,
-                left: true,
-                topRight: false,
-                bottomRight: false,
-                bottomLeft: false,
-                topLeft: false,
-              }}
-            >
-              <FlexColumn height={windowHeight - 120}>
-                <CodeSection
-                  value={code}
-                  setValue={setCode}
-                  languageIds={roomInfo.languageIds}
-                  languageId={languageId}
-                  setLanguageId={setLanguageId}
-                />
-                <Resizable
-                  defaultSize={{ width: '100%', height: '40%' }}
-                  minHeight={'20%'}
-                  maxHeight={'80%'}
-                  enable={{
-                    top: true,
-                    right: false,
-                    bottom: false,
-                    left: false,
-                    topRight: false,
-                    bottomRight: false,
-                    bottomLeft: false,
-                    topLeft: false,
-                  }}
-                >
-                  <ResultSection
-                    results={testResult}
-                    isFinished={finished}
-                    finish={sendFinished}
-                    test={() => {
-                      submitCode('test')
-                    }}
-                    submit={() => {
-                      submitCode('submit')
-                    }}
-                    onSubmitButton={onSubmitButton}
-                    onTestButton={onTestButton}
-                  />
-                </Resizable>
-              </FlexColumn>
-            </Resizable>
-          </FlexBox2>
-        </Container>
+          </>
+          {/* LeftPane */}
+          <ProblemImage src={problems[problemIdx].problemImageUrl} />
+          {/* RightUpPane */}
+          <CodeSection
+            value={code}
+            setValue={setCode}
+            languageIds={roomInfo.languageIds}
+            languageId={languageId}
+            setLanguageId={setLanguageId}
+          />
+          {/* RightDownPane */}
+          <ResultSection
+            results={testResult}
+            isFinished={finished}
+            finish={sendFinished}
+            test={() => {
+              submitCode('test')
+            }}
+            submit={() => {
+              submitCode('submit')
+            }}
+            isSubmit={isSubmit}
+          />
+        </Layout>
       ) : (
-        <Loading height="70vh" />
+        <Loading height="90vh" />
       )}
     </>
   )
 }
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  height: 100%;
-
-  padding: 1rem;
-`
-const FlexBox = styled.div`
-  display: flex;
-  justify-content: space-between;
-`
-const FlexBox2 = styled.div`
-  display: flex;
-  justify-content: space-between;
-  gap: 5px;
-`
-
-const FlexColumn = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-
-  height: ${({ height }) => height}px;
-`
-const ImageWrapper = styled.div`
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-
-  height: ${({ height }) => height}px;
-  background-color: ${({ theme }) => theme.whiteColor};
-`
 
 const ButtonWrapper = styled.div`
   display: flex;

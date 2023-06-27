@@ -42,7 +42,7 @@ export default function ProblemList() {
   // lastPage : 마지막 페이지의 인덱스 계산
   const lastPage = useMemo(() => {
     if (!problems) return
-    if (problems.length / PROBLEM_PER_PAGE) {
+    if (problems.length % PROBLEM_PER_PAGE) {
       return parseInt(problems.length / PROBLEM_PER_PAGE)
     }
     return parseInt(problems.length / PROBLEM_PER_PAGE) - 1
@@ -88,14 +88,15 @@ export default function ProblemList() {
 const Container = styled.div`
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   align-items: stretch;
 
   width: 80%;
 
-  padding: 2rem 0.5rem;
+  padding: 2rem 0.5rem 3rem;
 
   @media screen and (min-width: 1024px) {
-    padding: 2rem 3rem;
+    padding: 2rem 3rem 3rem;
   }
 `
 const ProblemsContainer = styled.div`

@@ -33,10 +33,7 @@ apiRequest.interceptors.response.use(
     const originalConfig = error.config // 기존 요청 정보 저장
     const response = error.response // 에러 정보 추출
     // accesstoken 재발급 로직
-    if (
-      response.status === 400 &&
-      response.data.errorMessage === 'accessToken expired'
-    ) {
+    if (response.status === 403 && response.data === 'accessToken expired') {
       console.log('accessToken 재발급 요청 보냄')
       // accessToken 재발급 요청
       const [url, method] = api('refreshToken')
@@ -44,19 +41,19 @@ apiRequest.interceptors.response.use(
       await axios
         .request(config)
         .then((res) => {
-          console.log('accessToken 재발급 요청 response', res)
+          console.log('accessToken 재발급 요청 response')
           // accessToken 재발급 성공 시, 새로운 accessToken으로 기존 요청 반복
           return apiRequest(originalConfig)
         })
         .catch((err) => {
-          console.log('accessToken 재발급 요청 error', err)
+          console.log('accessToken 재발급 요청 error')
           // accessToken 재발급 실패 시, 로그인 페이지로 사용자 이동
-          alert('다시 로그인 해주세요')
-          return redirect('/auth/login')
+          console.log('다시 로그인 해주세요')
+          window.location.href = 'https://sccs.kr/auth/login'
         })
     }
-    if (response.status === 500) {
-      alert('서버와의 통신에 문제가 발생하였습니다.')
+    if (response.status >= 500) {
+      console.log('서버와의 통신에 문제가 발생하였습니다.')
     }
     return Promise.reject(error)
   },

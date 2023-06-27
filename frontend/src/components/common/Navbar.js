@@ -1,4 +1,4 @@
-import { React, useMemo } from 'react'
+import { React, useEffect } from 'react'
 import styled from 'styled-components'
 import { setExpiration } from 'redux/expSlice'
 import { toggleTheme } from 'redux/themeSlice'
@@ -9,16 +9,10 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import api from 'constants/api'
 import axios from 'libs/axios'
 import checkLogin from 'libs/checkLogin'
+import getScoreIcon from 'libs/getScoreIcon'
 import Logo from 'components/common/Logo'
 import IconButton from 'components/common/IconButton'
-
-import {
-  FaChessQueen,
-  FaChessRook,
-  FaChessKnight,
-  FaChessBishop,
-  FaChessPawn,
-} from 'react-icons/fa'
+// import getUserInfo from 'libs/getUserInfo'
 
 /*
 상단 네비게이션바 컴포넌트
@@ -32,30 +26,14 @@ export default function Navbar() {
 
   const theme = useSelector((state) => state.theme) // 리덕스 -> theme정보
 
-  const isLogin = checkLogin() // 로그인 여부 판단
+  // 로컬에서 구동 시, 중복 요청으로 undefined 자동 할당
+  // useEffect(() => {
+  //   getUserInfo()
+  // }, [])
 
   const user = useSelector((state) => state.user)
-  console.log('user', user)
 
-  const gradeIcons = [
-    <FaChessQueen />,
-    <FaChessRook />,
-    <FaChessKnight />,
-    <FaChessBishop />,
-    <FaChessPawn />,
-  ]
-
-  const index = useMemo(() => {
-    if (user === null) return 4
-    else {
-      if (user.score >= 1000000) return 0
-      if (user.score >= 30000) return 1
-      if (user.score >= 3000) return 2
-      return 3
-    }
-  }, [user])
-
-  console.log('idx', index)
+  const isLogin = checkLogin() // 로그인 여부 판단
 
   const logout = () => {
     navigate('/')
@@ -63,7 +41,11 @@ export default function Navbar() {
     dispatch(setExpiration(null))
     const [url, method] = api('logout')
     const config = { url, method }
-    axios.request(config)
+    axios(config)
+      .then((res) => {})
+      .catch((err) => {
+        alert('로그아웃 실패')
+      })
   }
 
   return (
@@ -86,15 +68,15 @@ export default function Navbar() {
         <NavStyle to="/about">About</NavStyle>
         {isLogin && user ? (
           <>
-            <IconWrapper>{gradeIcons[index]}</IconWrapper>
-            <NavStyle
+            <NavStyle2
               to="/mypage/study"
               className={`${
                 pathname.substring(0, 7) === '/mypage' ? 'active' : null
               }`}
             >
-              {user.nickname}
-            </NavStyle>
+              <IconWrapper>{getScoreIcon(user.score)[0]}</IconWrapper>
+              {user.id}
+            </NavStyle2>
             <StyledDiv onClick={logout}>Logout</StyledDiv>
           </>
         ) : (
@@ -118,6 +100,8 @@ const Nav = styled.div`
 
   margin: 1.5rem 0rem;
   padding: 0rem 2rem;
+
+  font-family: 'bigjohn';
 `
 const Flexbox = styled.div`
   display: flex;
@@ -139,6 +123,22 @@ const ButtonWrapper = styled.div`
 const NavStyle = styled(NavLink)`
   margin: 1rem 0rem;
   padding: 0rem 2rem 0rem 0rem;
+
+  font-size: 1.7rem;
+  font-weight: 500;
+  color: ${({ theme }) => theme.secondaryFontColor};
+
+  &.active {
+    color: ${({ theme }) => theme.primaryFontColor};
+    font-weight: 600;
+  }
+`
+const NavStyle2 = styled(NavLink)`
+  display: flex;
+  align-items: center;
+
+  margin: 1rem 1.5rem 1rem 0rem;
+  padding: 0rem 0.5rem 0rem 0rem;
 
   font-size: 1.7rem;
   font-weight: 500;
@@ -173,8 +173,7 @@ const StyledDiv2 = styled.div`
   cursor: pointer;
 `
 const IconWrapper = styled.div`
-  color: ${({ theme }) => theme.secondaryFontColor};
   font-size: 25px;
   margin-top: 5px;
-  margin-right: 5px;
+  padding: 0px;
 `
